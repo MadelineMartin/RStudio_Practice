@@ -5,3 +5,10 @@ install.packages("dplyr")
 library(dplyr)
 # Note that there are quotation marks when installing a package, but not when loading it
 # and remember that hashtags let you add useful notes to your code! 
+edidiv <- read.csv("C:/Users/marti/Documents/RStudio_Practice/ourcodingclub_tutorials/CC-RBasics-master/CC-RBasics-master/edidiv.csv")
+
+head(edidiv) #Displays the firts few rows
+tail(edidiv) #Displays the last few rows
+str(edidiv) #Tells you whether the variables are continuous, integers, categorical or characters
+
+
