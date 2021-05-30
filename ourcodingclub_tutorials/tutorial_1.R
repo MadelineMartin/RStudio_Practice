@@ -67,4 +67,78 @@ names(biodiv) <- c("Beetle",
                    "Mollusc")
 barplot(biodiv, xlab = "Taxon", ylab = "Number", ylim = c(0,600),cex.names = 0.8, cex.axis = 1.0, cex.lab = 1.2)
 
+# CREATING A DATAFRAME AND PLOTTING IT
+
+# Creating an object called "taxa" that contains all the taxa names
+taxa <- c("Beetle",
+          "Bird",
+          "Butterfly",
+          "Dragonfly",
+          "Flowering.Plants",
+          "Fungus",
+          "Hymenopteran",
+          "Lichen",
+          "Liverwort",
+          "Mammal",
+          "Mollusc")
+# Turning this object into a factor, i.e. a categorical variable
+taxa_f <- factor(taxa)
+
+# Combining all the values for the number of species in an object called richness
+richness <- c(a,b,c,d,e,f,g,h,i,j,k)
+
+# Creating the data frame from the two vectors
+biodata <- data.frame(taxa_f, richness)
+
+# Saving the file
+write.csv(biodata, file="biodata.csv")  # it will be saved in your working directory
+
+png("barplot2.png", width=1600, height=600)
+barplot(biodata$richness, names.arg=c("Beetle",
+                                      "Bird",
+                                      "Butterfly",
+                                      "Dragonfly",
+                                      "Flowering.Plants",
+                                      "Fungus",
+                                      "Hymenopteran",
+                                      "Lichen",
+                                      "Liverwort",
+                                      "Mammal",
+                                      "Mollusc"),
+        xlab="Taxa", ylab="Number of species", ylim=c(0,600))
+dev.off()
+
+
+# Extra Challenge
+# produce a bar plot of the mean wingspan for each species and save it to your computer
+
+sparrow <- mean(22,24,21)
+kingfisher <- mean(26,23,25)
+eagle <- mean(195,201,185)
+hummingbird <- mean(8,9,9)
+
+# chain them together in a vector
+wingspan <- c(sparrow, kingfisher, eagle, hummingbird)
+
+#create a bird species vector
+bird_sp <- c("sparrow","kingfisher","eagle","hummingbird")
+
+# make bird_sp a factor
+class(bird_sp) #currently character
+bird_sp <- as.factor(bird_sp) #transforming into factor
+class(bird_sp)
+
+#combine the two vectors into a dataframe
+wings <- data.frame(bird_sp,wingspan)
+
+#plot
+png("occ_t1_extrachallenge.png", width = 800, height= 600)
+
+barplot(wings$wingspan, names.arg = wings$bird_sp,    # notice how we call the bird_sp column instead of typing all the names
+        xlab = "Bird species", 
+        ylab = "Average wingspan (cm)",               # adding axis titles
+        ylim = c(0, 200),                             # setting the limits of the y axis to fit the eagle
+        col = "gold"                                  # changing the colour because why not!
+)
+dev.off()
 
