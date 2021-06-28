@@ -1,0 +1,18 @@
+---
+title: "Creating a Package that dependes on RStan"
+output: html_notebook
+---
+Introduction: 
+In this vignette we will walk through the steps necessary for creating an R package that depends on Stan by creating a package with one function that fits a simple linear regression.
+
+The rstantools package offers two methods for adding Stan functionality to R packages:
+
+- rstan_create_package(): set up a new R package with   Stan programs
+
+- use_rstan(): add Stan functionality to an existing R   package
+
+
+```{r}
+library("rstantools")
+rstan_create_package(path = "rstanlm")
+```
