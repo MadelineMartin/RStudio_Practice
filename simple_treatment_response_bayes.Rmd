@@ -1,0 +1,195 @@
+---
+title: "Treatment Response model"
+output: html_notebook
+---
+
+```{r}
+library("Rcpp")
+library("tidyverse")
+library("devtools")
+library("brms")
+library("rstan")
+library("rstantools")
+```
+
+make a data frame that has two columns the first with “treatment” with values 
+1 through 5 and the second with “response” with random gaussian values with a different mean for each treatment. So there are say 100 rows for each treatment, so the data frame frame has 500 rows total.
+
+```{r}
+data <- tibble::tibble(treatment = 1:5) %>% # piping tibble(treatment) into mutate. tibble constructs a df
+  dplyr::mutate( # allows you to manipulate dataframe
+    treatment_mean = rnorm( # finding the treatment mean
+      n = 5,
+      mean = 10,
+      sd = 1)) %>% # piping treatment mean into rowwise
+  dplyr::rowwise() %>% # piping rowwise into do 
+  dplyr::do({ # do applies a function to each group (in this case rowwise)
+    treatment_params <- . # the df
+    tibble::tibble( # constructing a df
+      treatment = treatment_params$treatment, # putting treatment into the df
+      treatment_mean = treatment_params$treatment_mean, # treatment_mean into the df
+      value = rnorm( # response value
+        n = 100, # using 100 random Gaussian distribution values around the mean
+        mean = treatment_params$treatment_mean,
+        sd = runif(n = 100))) # with a sd between 0 & 1 (default)
+  }) %>%
+  dplyr::ungroup() # removes grouping done by group_by 
+```
+
+
+looking at a summary of the values in data
+
+```{r}
+data %>%
+  dplyr::group_by(treatment) %>%
+  dplyr::summarize(
+    treatment_mean = treatment_mean[1],
+    empirical_mean = mean(value))
+```
+
+```{r}
+ggplot(data = data,
+       aes(x = treatment,
+           y = value)) +
+  geom_point(size = 1.2,
+             alpha = 0.8) + 
+  theme_minimal() +
+  labs(title = "Responses For Each Treatment",
+       x = "Treatment",
+       y = "Response")
+```
+
+Fitting the data to a simple Bayesian model (brm)
+formula: 
+1. A dependent variable we want to predict
+2. ~ that is used to indicate that we now give the other variables of interest.
+3. insert that the dependent variable has a variance and that we want an intercept.
+
+treatment_mean (dependent variable) ~ 0 (intercept) + treatment (variance)
+
+```{r}
+model <- brms::brm(
+  formula = treatment_mean ~ 0 + treatment, 
+  data = data )
+```
+model information:
+
+```{r}
+model
+```
+
+Smaller sd
+```{r}
+data2 <- tibble::tibble(treatment = 1:5) %>% 
+  dplyr::mutate( 
+    treatment_mean = rnorm( 
+      n = 5,
+      mean = 10,
+      sd = 1)) %>% 
+  dplyr::rowwise() %>% 
+  dplyr::do({ 
+    treatment_params <- . 
+    tibble::tibble( 
+      treatment = treatment_params$treatment, 
+      treatment_mean = treatment_params$treatment_mean, 
+      response = rnorm( 
+        n = 100, 
+        mean = treatment_params$treatment_mean,
+        sd = runif(min = 0, max = 0.5, n = 100))) # sd changed to 0.5 max
+  }) %>%
+  dplyr::ungroup()  
+```
+
+```{r}
+data2 %>%
+  dplyr::group_by(treatment) %>%
+  dplyr::summarize(
+    treatment_mean = treatment_mean[1],
+    empirical_mean = mean(response))
+```
+
+
+```{r}
+ggplot(data = data2,
+       aes(x = treatment,
+           y = response)) +
+  geom_point(size = 1.2,
+             alpha = 0.8) + 
+  theme_minimal() +
+  labs(title = "Responses For Each Treatment",
+       x = "Treatment",
+       y = "Response")
+```
+
+```{r}
+model2 <- brms::brm(
+  formula = treatment_mean ~ 0 + treatment, 
+  data = data2 )
+```
+
+```{r}
+model2
+```
+```{r}
+model
+```
+
+More Data Points
+```{r}
+data3 <- tibble::tibble(treatment = 1:5) %>% 
+  dplyr::mutate( 
+    treatment_mean = rnorm( 
+      n = 5,
+      mean = 10,
+      sd = 1)) %>% 
+  dplyr::rowwise() %>% 
+  dplyr::do({ 
+    treatment_params <- . 
+    tibble::tibble( 
+      treatment = treatment_params$treatment, 
+      treatment_mean = treatment_params$treatment_mean, 
+      response = rnorm( 
+        n = 200, # increased sample size by 100
+        mean = treatment_params$treatment_mean,
+        sd = runif(min = 0, max = 0.5, n = 200))) # sd changed to back to 1
+  }) %>%
+  dplyr::ungroup() 
+
+```
+
+```{r}
+data3 %>%
+  dplyr::group_by(treatment) %>%
+  dplyr::summarize(
+    treatment_mean = treatment_mean[1],
+    empirical_mean = mean(response))
+```
+
+```{r}
+ggplot(data = data3,
+       aes(x = treatment,
+           y = response)) +
+  geom_point(size = 1.2,
+             alpha = 0.8) + 
+  theme_minimal() +
+  labs(title = "Responses For Each Treatment",
+       x = "Treatment",
+       y = "Response")
+```
+
+```{r}
+model3 <- brms::brm(
+  formula = treatment_mean ~ 0 + treatment, 
+  data = data3 )
+```
+
+```{r}
+model3
+```
+```{r}
+model
+```
+```{r}
+model2
+```
+Decreasing sd and increasing sample size decreases error
