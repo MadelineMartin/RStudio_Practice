@@ -10,13 +10,14 @@ library("devtools")
 library("brms")
 library("rstan")
 library("rstantools")
+library("tidybayes")
 ```
 
 make a data frame that has two columns the first with “treatment” with values 
 1 through 5 and the second with “response” with random gaussian values with a different mean for each treatment. So there are say 100 rows for each treatment, so the data frame frame has 500 rows total.
 
 ```{r}
-data <- tibble::tibble(treatment = 1:5) %>% # piping tibble(treatment) into mutate. tibble constructs a df
+data <- tibble::tibble(treatment = as.factor(1:5)) %>% # piping tibble(treatment) into mutate. tibble constructs a df
   dplyr::mutate( # allows you to manipulate dataframe
     treatment_mean = rnorm( # finding the treatment mean
       n = 5,
@@ -31,7 +32,7 @@ data <- tibble::tibble(treatment = 1:5) %>% # piping tibble(treatment) into muta
       value = rnorm( # response value
         n = 100, # using 100 random Gaussian distribution values around the mean
         mean = treatment_params$treatment_mean,
-        sd = runif(n = 100))) # with a sd between 0 & 1 (default)
+        sd = 3)) # with a sd as 3
   }) %>%
   dplyr::ungroup() # removes grouping done by group_by 
 ```
@@ -44,8 +45,12 @@ data %>%
   dplyr::group_by(treatment) %>%
   dplyr::summarize(
     treatment_mean = treatment_mean[1],
-    empirical_mean = mean(value))
+    empirical_mean = mean(value),
+    sd = sd(value))
 ```
+
+
+plot of treatment and response
 
 ```{r}
 ggplot(data = data,
@@ -54,7 +59,7 @@ ggplot(data = data,
   geom_point(size = 1.2,
              alpha = 0.8) + 
   theme_minimal() +
-  labs(title = "Responses For Each Treatment",
+  labs(title = "Response of Each Treatment",
        x = "Treatment",
        y = "Response")
 ```
@@ -69,127 +74,157 @@ treatment_mean (dependent variable) ~ 0 (intercept) + treatment (variance)
 
 ```{r}
 model <- brms::brm(
-  formula = treatment_mean ~ 0 + treatment, 
-  data = data )
+  value ~ 0 + treatment,
+  data = data)
 ```
-model information:
+
+model info
 
 ```{r}
 model
 ```
 
-Smaller sd
+running model_w_prior
+
 ```{r}
-data2 <- tibble::tibble(treatment = 1:5) %>% 
-  dplyr::mutate( 
-    treatment_mean = rnorm( 
+model_w_prior <- brms::brm(
+  formula = value ~ 0 + treatment, 
+  data = data,
+  prior = c(
+    brms::prior(normal(10,3), 
+                class = "b",
+                lb = 0), 
+    brms::prior(normal(3,0.5),
+                class = "sigma"
+                ) )
+  # iter=8000,
+  # control=list(
+  #     adapt_delta=0.99,
+  #     max_treedepth=12)
+)
+```
+
+model_w_prior info
+
+```{r}
+model_w_prior
+
+```
+
+prior posterior plot
+
+```{r}
+prior_posterior_plot <- function(model, irq = .95) {
+  model_prior <- model %>%
+    brms:::update.brmsfit(sample_prior = "only") # updates the sample priors in model
+
+  draws <- dplyr::bind_rows( # bind rows returns a df
+    model %>% # piping model into tidydraws
+      tidybayes::tidy_draws() %>% # extract draws from a Bayesian fit into a wide format data frame
+      tidybayes::gather_variables() %>% # gathers variables form a tidy dataframe of draws from variables into a single column
+      dplyr::mutate(sample_type = "Posterior"), # mutating gather variables; creating a posterior column
+    model_prior %>%
+      tidybayes::tidy_draws() %>% 
+      tidybayes::gather_variables() %>%
+      dplyr::mutate(sample_type = "Prior")) %>% # creating a priors column
+    dplyr::filter(!stringr::str_detect(.variable, "__$")) %>% # detecting a string pattern in a variable
+    dplyr::group_by(.variable) %>% # grouping by variable
+      dplyr::filter( # filtering values based on quantile
+        .value < quantile(.value, 1 - (1-irq)/2),
+        .value > quantile(.value, (1 - irq)/2)) %>%
+    dplyr::ungroup() # removing grouping done by group_by 
+
+  ggplot2::ggplot(data = draws) + # graphing draws
+    ggplot2::theme_bw() + # black and white theme
+    ggplot2::theme(legend.position = "bottom") + # legend position
+    ggplot2::geom_density( # smooth density estimates
+      mapping = ggplot2::aes( # aesthetic mapping 
+        x = .value, # what is being plotted
+        # y = log(1 + ..density..),
+        fill = sample_type, # fill done by sample type
+        group = sample_type), # grouped by sample type
+      color = "black", # outline color is black 
+      alpha = .9) + # transparency
+    ggplot2::ggtitle( # plot title
+      label = paste0("Prior vs Posterior Marginal Distribution: ", model$name, " model")) +
+    ggplot2::facet_wrap( # makes a 1d sequence of panels into 2d
+      facets = dplyr::vars(.variable), # the number of panels = # variables
+      scales = "free") + 
+    ggplot2::scale_y_continuous("Density") + # y label along the whole y axis
+    ggplot2::scale_x_continuous("Parameter Value") + # x label along the whole x axis
+    ggplot2::scale_fill_discrete("Distribution") # scale is discrete for all plots
+}
+```
+```{r}
+prior_posterior_plot(model_w_prior)
+```
+less data
+```{r}
+data2 <- tibble::tibble(treatment = as.factor(1:5)) %>% # piping tibble(treatment) into mutate. tibble constructs a df
+  dplyr::mutate( # allows you to manipulate dataframe
+    treatment_mean = rnorm( # finding the treatment mean
       n = 5,
       mean = 10,
-      sd = 1)) %>% 
-  dplyr::rowwise() %>% 
-  dplyr::do({ 
-    treatment_params <- . 
-    tibble::tibble( 
-      treatment = treatment_params$treatment, 
-      treatment_mean = treatment_params$treatment_mean, 
-      response = rnorm( 
-        n = 100, 
+      sd = 1)) %>% # piping treatment mean into rowwise
+  dplyr::rowwise() %>% # piping rowwise into do 
+  dplyr::do({ # do applies a function to each group (in this case rowwise)
+    treatment_params <- . # the df
+    tibble::tibble( # constructing a df
+      treatment = treatment_params$treatment, # putting treatment into the df
+      treatment_mean = treatment_params$treatment_mean, # treatment_mean into the df
+      value = rnorm( # response value
+        n = 50, # using 50 random Gaussian distribution values around the mean
         mean = treatment_params$treatment_mean,
-        sd = runif(min = 0, max = 0.5, n = 100))) # sd changed to 0.5 max
+        sd = 3)) # with a sd as 3
   }) %>%
-  dplyr::ungroup()  
-```
-
-```{r}
-data2 %>%
-  dplyr::group_by(treatment) %>%
-  dplyr::summarize(
-    treatment_mean = treatment_mean[1],
-    empirical_mean = mean(response))
-```
-
-
-```{r}
-ggplot(data = data2,
-       aes(x = treatment,
-           y = response)) +
-  geom_point(size = 1.2,
-             alpha = 0.8) + 
-  theme_minimal() +
-  labs(title = "Responses For Each Treatment",
-       x = "Treatment",
-       y = "Response")
+  dplyr::ungroup() # removes grouping done by group_by 
 ```
 
 ```{r}
 model2 <- brms::brm(
-  formula = treatment_mean ~ 0 + treatment, 
-  data = data2 )
+  value ~ 0 + treatment,
+  data = data)
 ```
-
 ```{r}
 model2
 ```
-```{r}
-model
-```
+less data, greater error
 
-More Data Points
+smaller sd
 ```{r}
-data3 <- tibble::tibble(treatment = 1:5) %>% 
-  dplyr::mutate( 
-    treatment_mean = rnorm( 
+data3 <- tibble::tibble(treatment = as.factor(1:5)) %>% # piping tibble(treatment) into mutate. tibble constructs a df
+  dplyr::mutate( # allows you to manipulate dataframe
+    treatment_mean = rnorm( # finding the treatment mean
       n = 5,
       mean = 10,
-      sd = 1)) %>% 
-  dplyr::rowwise() %>% 
-  dplyr::do({ 
-    treatment_params <- . 
-    tibble::tibble( 
-      treatment = treatment_params$treatment, 
-      treatment_mean = treatment_params$treatment_mean, 
-      response = rnorm( 
-        n = 200, # increased sample size by 100
+      sd = 1)) %>% # piping treatment mean into rowwise
+  dplyr::rowwise() %>% # piping rowwise into do 
+  dplyr::do({ # do applies a function to each group (in this case rowwise)
+    treatment_params <- . # the df
+    tibble::tibble( # constructing a df
+      treatment = treatment_params$treatment, # putting treatment into the df
+      treatment_mean = treatment_params$treatment_mean, # treatment_mean into the df
+      value = rnorm( # response value
+        n = 100, # using 100 random Gaussian distribution values around the mean
         mean = treatment_params$treatment_mean,
-        sd = runif(min = 0, max = 0.5, n = 200))) # sd changed to back to 1
+        sd = runif(n = 100, min = 0, max = 1))) # with a sd between 0 & 1 (default)
   }) %>%
-  dplyr::ungroup() 
-
+  dplyr::ungroup() # removes grouping done by group_by 
 ```
-
 ```{r}
-data3 %>%
-  dplyr::group_by(treatment) %>%
-  dplyr::summarize(
-    treatment_mean = treatment_mean[1],
-    empirical_mean = mean(response))
-```
 
-```{r}
-ggplot(data = data3,
-       aes(x = treatment,
-           y = response)) +
-  geom_point(size = 1.2,
-             alpha = 0.8) + 
-  theme_minimal() +
-  labs(title = "Responses For Each Treatment",
-       x = "Treatment",
-       y = "Response")
-```
-
-```{r}
 model3 <- brms::brm(
-  formula = treatment_mean ~ 0 + treatment, 
-  data = data3 )
-```
+  value ~ 0 + treatment,
+  data = data)
 
+```
 ```{r}
 model3
 ```
-```{r}
-model
-```
-```{r}
-model2
-```
-Decreasing sd and increasing sample size decreases error
+smaller sd, slightly smaller error
+
+
+
+
+
+
