@@ -1,8 +1,10 @@
 ---
-title: "Treatment Response model"
+title: "Basic Treatment Response Model"
 output: html_notebook
 ---
 
+___
+Required Imports
 ```{r}
 library("Rcpp")
 library("tidyverse")
@@ -13,6 +15,8 @@ library("rstantools")
 library("tidybayes")
 ```
 
+
+___
 make a data frame that has two columns the first with “treatment” with values 
 1 through 5 and the second with “response” with random gaussian values with a different mean for each treatment. So there are say 100 rows for each treatment, so the data frame frame has 500 rows total.
 
@@ -37,8 +41,8 @@ data <- tibble::tibble(treatment = as.factor(1:5)) %>% # piping tibble(treatment
   dplyr::ungroup() # removes grouping done by group_by 
 ```
 
-
-looking at a summary of the values in data
+___
+Summary of the values in data
 
 ```{r}
 data %>%
@@ -49,8 +53,8 @@ data %>%
     sd = sd(value))
 ```
 
-
-plot of treatment and response
+___
+Plot of treatment and response
 
 ```{r}
 ggplot(data = data,
@@ -63,28 +67,27 @@ ggplot(data = data,
        x = "Treatment",
        y = "Response")
 ```
-
+___
 Fitting the data to a simple Bayesian model (brm)
 formula: 
 1. A dependent variable we want to predict
 2. ~ that is used to indicate that we now give the other variables of interest.
 3. insert that the dependent variable has a variance and that we want an intercept.
 
-treatment_mean (dependent variable) ~ 0 (intercept) + treatment (variance)
+value (dependent variable) ~ 0 (intercept) + treatment (variance)
 
 ```{r}
 model <- brms::brm(
   value ~ 0 + treatment,
   data = data)
 ```
-
-model info
-
+___
+Model info
 ```{r}
 model
 ```
-
-running model_w_prior
+___
+Running model_w_prior
 
 ```{r}
 model_w_prior <- brms::brm(
@@ -97,36 +100,31 @@ model_w_prior <- brms::brm(
     brms::prior(normal(3,0.5),
                 class = "sigma"
                 ) )
-  # iter=8000,
-  # control=list(
-  #     adapt_delta=0.99,
-  #     max_treedepth=12)
 )
 ```
-
-model_w_prior info
-
+___
+Model_w_prior info
 ```{r}
 model_w_prior
 
 ```
-
-prior posterior plot
-
+___
+Graphing prior and posterior distribution
 ```{r}
-prior_posterior_plot <- function(model, irq = .95) {
+prior_posterior_plot <- function(model,irq = .95) {
+  
   model_prior <- model %>%
     brms:::update.brmsfit(sample_prior = "only") # updates the sample priors in model
 
   draws <- dplyr::bind_rows( # bind rows returns a df
     model %>% # piping model into tidydraws
       tidybayes::tidy_draws() %>% # extract draws from a Bayesian fit into a wide format data frame
-      tidybayes::gather_variables() %>% # gathers variables form a tidy dataframe of draws from variables into a single column
-      dplyr::mutate(sample_type = "Posterior"), # mutating gather variables; creating a posterior column
+      tidybayes::gather_variables() %>% # gathers variables from a tidy dataframe of draws from variables into a single column
+      dplyr::mutate(sample_type = "Posterior"), # mutating sample type to read posterior
     model_prior %>%
       tidybayes::tidy_draws() %>% 
       tidybayes::gather_variables() %>%
-      dplyr::mutate(sample_type = "Prior")) %>% # creating a priors column
+      dplyr::mutate(sample_type = "Prior")) %>% # renaming sample type 
     dplyr::filter(!stringr::str_detect(.variable, "__$")) %>% # detecting a string pattern in a variable
     dplyr::group_by(.variable) %>% # grouping by variable
       dplyr::filter( # filtering values based on quantile
@@ -144,7 +142,7 @@ prior_posterior_plot <- function(model, irq = .95) {
         fill = sample_type, # fill done by sample type
         group = sample_type), # grouped by sample type
       color = "black", # outline color is black 
-      alpha = .9) + # transparency
+      alpha = .9) +   # transparency  
     ggplot2::ggtitle( # plot title
       label = paste0("Prior vs Posterior Marginal Distribution: ", model$name, " model")) +
     ggplot2::facet_wrap( # makes a 1d sequence of panels into 2d
@@ -158,7 +156,8 @@ prior_posterior_plot <- function(model, irq = .95) {
 ```{r}
 prior_posterior_plot(model_w_prior)
 ```
-less data
+___
+Less data
 ```{r}
 data2 <- tibble::tibble(treatment = as.factor(1:5)) %>% # piping tibble(treatment) into mutate. tibble constructs a df
   dplyr::mutate( # allows you to manipulate dataframe
@@ -179,16 +178,20 @@ data2 <- tibble::tibble(treatment = as.factor(1:5)) %>% # piping tibble(treatmen
   }) %>%
   dplyr::ungroup() # removes grouping done by group_by 
 ```
-
+___
+model2 fitting
 ```{r}
 model2 <- brms::brm(
   value ~ 0 + treatment,
   data = data)
 ```
+___
+model2 info
 ```{r}
 model2
 ```
 less data, greater error
+___
 
 smaller sd
 ```{r}
@@ -218,13 +221,9 @@ model3 <- brms::brm(
   data = data)
 
 ```
+___
+model3 info
 ```{r}
 model3
 ```
 smaller sd, slightly smaller error
-
-
-
-
-
-
